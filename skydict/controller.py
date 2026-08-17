@@ -16,6 +16,7 @@ from .macos.hotkey import DEFAULT_TRIGGER, HotkeyEvent, ModifierHotkeyListener
 from .output.inserter import build_inserter
 from .pipeline import DictationResult, DictationSession, TooShortError
 from .stt.base import SttError
+from .stt.registry import build_backend
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +65,18 @@ class DictationController:
     def start(self) -> None:
         self.session.warmup(use_vad=self.mode == "hold_vad")
         self.listener.start()
+
+    def rebuild_backend(self) -> None:
+        """Swap in the backend the settings now name, keeping the session's listeners.
+
+        Used when the menubar changes backend at runtime. Warming up here means a
+        missing key or an unavailable model is reported on the click that caused it,
+        not on the next dictation.
+        """
+        self.session.backend = build_backend(self.settings)
+        self.inserter = build_inserter(self.settings.insert_mode)
+        self.session.deliver = self.inserter.deliver
+        self.session.warmup(use_vad=self.mode == "hold_vad")
 
     def stop(self) -> None:
         self.listener.stop()

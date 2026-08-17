@@ -13,6 +13,7 @@ import typer
 from .audio.recorder import list_devices
 from .config import SAMPLE_RATE, BackendName, Settings, TriggerMode, config_path
 from .controller import DictationController
+from .history import History
 from .macos.hotkey import DEFAULT_TRIGGER
 from .macos.permissions import (
     PermissionError_,
@@ -261,6 +262,44 @@ def listen(
             threading.Event().wait()
     except KeyboardInterrupt:
         typer.secho("\nStopped.", fg=typer.colors.BLUE, err=True)
+
+
+@app.command()
+def menubar(
+    backend: Optional[BackendName] = typer.Option(None, "--backend", "-b"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Run SkyDict as a menubar app."""
+    _configure_logging(verbose)
+    settings = _load_settings(backend, None)
+
+    from .ui.menubar import SkyDictApp
+
+    SkyDictApp(settings).run()
+
+
+@app.command()
+def history(
+    count: int = typer.Option(10, "--count", "-n", help="How many entries to show."),
+    search: Optional[str] = typer.Option(None, "--search", "-s"),
+    clear: bool = typer.Option(False, "--clear", help="Delete all entries."),
+) -> None:
+    """Show recent dictations."""
+    store = History()
+    if clear:
+        store.clear()
+        typer.secho("History cleared.", fg=typer.colors.GREEN)
+        return
+
+    entries = store.search(search, count) if search else store.recent(count)
+    if not entries:
+        typer.secho("Nothing recorded yet.", fg=typer.colors.YELLOW)
+        return
+
+    for entry in entries:
+        stamp = entry.created_at.astimezone().strftime("%Y-%m-%d %H:%M")
+        typer.secho(f"{stamp}  [{entry.backend}]", fg=typer.colors.BLUE, nl=False)
+        typer.echo(f"  {entry.text}")
 
 
 @app.command()

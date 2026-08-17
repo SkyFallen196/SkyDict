@@ -73,6 +73,21 @@ def fake_sd(monkeypatch):
     return module
 
 
+@pytest.fixture(autouse=True)
+def isolated_app_support(tmp_path, monkeypatch):
+    """Point every path helper at a temp directory.
+
+    Without this a test that exercises a save path rewrites the developer's own
+    config.json and history.db — which is exactly what happened once.
+    """
+    root = tmp_path / "Application Support" / "SkyDict"
+    root.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr("skydict.config.config_dir", lambda: root)
+    monkeypatch.setattr("skydict.config.config_path", lambda: root / "config.json")
+    monkeypatch.setattr("skydict.history.history_path", lambda: root / "history.db")
+    return root
+
+
 @pytest.fixture
 def api_key(monkeypatch) -> str:
     """Provide a credential via the env fallback so tests never touch the real Keychain."""

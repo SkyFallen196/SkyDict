@@ -7,8 +7,8 @@ text lands in whatever you were typing into. Speech recognition runs either thro
 OpenAI-compatible endpoint (Groq, OpenAI, a self-hosted vLLM) or fully offline on a local
 Hugging Face model such as GigaAM v3.
 
-> **Status:** stage 2 — hold a hotkey anywhere and the text is pasted into the focused
-> app. The menubar UI comes next.
+> **Status:** stage 3 — runs as a menubar app with a settings window and dictation
+> history. LLM post-processing and a packaged `.app` come next.
 
 ## Install
 
@@ -43,7 +43,15 @@ API keys are never written to that file. They are read from the Keychain, or fro
 
 ## Use
 
-Hold **right Option**, speak, release — the text is pasted where your cursor is:
+Run it as a menubar app — status icon, backend and trigger switching, settings window
+and history all in one place:
+
+```bash
+skydict menubar
+```
+
+Or headless, without the menubar. Hold **right Option**, speak, release — the text is
+pasted where your cursor is:
 
 ```bash
 skydict listen
@@ -54,6 +62,8 @@ also ends the recording on silence. `--trigger left_option|fn|right_command|…`
 different key.
 
 ```bash
+skydict history                     # recent dictations
+skydict history --search молоко     # find one
 skydict permissions                 # check what macOS has granted
 skydict permissions --request       # trigger the system prompt
 skydict devices                     # list microphones
@@ -103,13 +113,16 @@ The GigaAM `e2e` variants return punctuated, normalised Russian text directly.
 ## Development
 
 ```bash
-pytest              # 92 fast tests, no network, microphone or permissions
+pytest              # 152 fast tests, no network, microphone or permissions
 pytest -m slow      # 6 more against the real GigaAM and Silero weights
 ruff check .
 ```
 
-The tests fake `sounddevice`, `Quartz` and the ONNX sessions, so the fast suite needs no
-hardware and no granted permissions.
+The fast suite fakes `sounddevice`, `Quartz` and the ONNX sessions, so it needs no
+hardware and no granted permissions. AppKit and rumps are *not* faked — they work
+headlessly, and stubbing them hid two real bugs (a lazily-created submenu and a
+process-global Objective-C class name). Every test also runs against a temporary
+Application Support directory, so none can overwrite your own config or history.
 `tests/data/sample_ru.wav` is Russian speech generated with the macOS speech synthesiser;
 regenerate it with:
 
