@@ -242,21 +242,52 @@ class SkyDictApp:
     def _open_settings(self, _sender) -> None:
         from .settings_window import SettingsWindow
 
+        # Bring an already-open window forward rather than stacking a second one.
+        existing = self._settings_window
+        if existing is not None and existing._window is not None and existing._window.isVisible():
+            existing.show()
+            return
+
+        # Otherwise build a fresh one: the window edits a copy taken at construction, so
+        # reusing a closed one would show values from before the last menu change and
+        # silently undo it on save.
+        #
         # Held on the app, not a local: dropping the last Python reference would let the
         # window, its widgets and the Save button's target be collected on the way out.
-        if self._settings_window is None:
-            self._settings_window = SettingsWindow(
-                self.settings, on_save=self._settings_saved
-            )
+        self._settings_window = SettingsWindow(self.settings, on_save=self._settings_saved)
         self._settings_window.show()
 
     def _settings_saved(self, settings: Settings) -> None:
-        self.settings = settings
-        settings.save()
+        """Adopt settings edited in the window.
+
+        The window edits a deep copy, so the new values are copied field by field into
+        the live object instead of rebinding it. The controller and the session hold
+        references to that object, and rebinding would leave both reading the old
+        settings — which is exactly why picking Toggle in the window used to leave the
+        hotkey behaving as Hold.
+        """
+        for name in type(settings).model_fields:
+            setattr(self.settings, name, getattr(settings, name))
+
+        self._sync_menu_state()
         try:
             self.controller.rebuild_backend()
+        except MissingCredentialError as exc:
+            self.notify("Backend needs a key", str(exc))
         except Exception as exc:
             log.warning("Backend rebuild after settings change failed: %s", exc)
+            self.notify("Could not apply settings", str(exc))
+
+    def _sync_menu_state(self) -> None:
+        """Move the menu ticks to match the current settings."""
+        for name in ("cloud", "local"):
+            item = self._menu_items.get(f"backend:{name}")
+            if item is not None:
+                item.state = self.settings.backend == name
+        for mode in ("hold", "toggle", "hold_vad"):
+            item = self._menu_items.get(f"mode:{mode}")
+            if item is not None:
+                item.state = self.settings.trigger_mode == mode
 
     def _show_permissions(self, _sender) -> None:
         import rumps

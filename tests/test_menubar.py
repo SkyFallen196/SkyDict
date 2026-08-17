@@ -280,14 +280,63 @@ class TestSettingsWindow:
         assert shown == ["shown"]
         assert app._settings_window is not None
 
-    def test_reopening_reuses_the_same_window(self, app, monkeypatch):
-        monkeypatch.setattr("skydict.ui.settings_window.SettingsWindow.show", lambda self: None)
+    def test_reopening_shows_the_current_settings(self, app, monkeypatch):
+        """The window edits a copy taken when it is built, so a closed one reused later
+        would show pre-change values and silently undo them on save."""
+        monkeypatch.setattr(
+            "skydict.ui.settings_window.SettingsWindow.show",
+            lambda self: self.build() if self._window is None else None,
+        )
 
         app._open_settings(None)
+        app.set_mode("hold_vad")
+        app._open_settings(None)
+
+        window = app._settings_window
+        selected = window._choice_values["trigger_mode"][
+            window._widgets["trigger_mode"].indexOfSelectedItem()
+        ]
+        assert selected == "hold_vad"
+
+    def test_an_open_window_is_brought_forward_not_duplicated(self, app, monkeypatch):
+        monkeypatch.setattr(
+            "skydict.ui.settings_window.SettingsWindow.show",
+            lambda self: self.build() if self._window is None else None,
+        )
+        app._open_settings(None)
         first = app._settings_window
+        first._window.makeKeyAndOrderFront_(None)
+
         app._open_settings(None)
 
         assert app._settings_window is first
+
+    def test_settings_saved_from_the_window_reach_the_controller(self, app):
+        """Rebinding app.settings left the controller and session on the old object, so
+        picking Toggle in the window left the hotkey still behaving as Hold."""
+        live = app.settings
+        edited = app.settings.model_copy(deep=True)
+        edited.trigger_mode = "toggle"
+        edited.backend = "local"
+
+        app._settings_saved(edited)
+
+        assert app.settings is live, "the live settings object was replaced"
+        assert live.trigger_mode == "toggle"
+        assert app.controller.settings.trigger_mode == "toggle"
+
+    def test_saving_moves_the_menu_ticks(self, app):
+        import rumps
+
+        app._menu_items["mode:toggle"] = rumps.MenuItem("Toggle")
+        app._menu_items["mode:hold"] = rumps.MenuItem("Hold")
+        edited = app.settings.model_copy(deep=True)
+        edited.trigger_mode = "toggle"
+
+        app._settings_saved(edited)
+
+        assert app._menu_items["mode:toggle"].state
+        assert not app._menu_items["mode:hold"].state
 
     def test_saving_applies_the_new_settings(self, app):
         new = Settings()
