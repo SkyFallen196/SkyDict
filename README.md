@@ -7,26 +7,30 @@ text lands in whatever you were typing into. Speech recognition runs either thro
 OpenAI-compatible endpoint (Groq, OpenAI, a self-hosted vLLM) or fully offline on a local
 Hugging Face model such as GigaAM v3.
 
-> **Status:** stage 4 — builds into a standalone `SkyDict.app`. LLM post-processing
-> ("modes") is the remaining piece.
+> **Status:** working. Dictating with the hotkey, both backends, the menubar app and the
+> packaged `SkyDict.app` are all in use. LLM post-processing ("modes") is the remaining
+> piece — the pipeline already calls a post-processor on every dictation, so adding them
+> means writing one, not rewiring anything.
 
 ## Install
 
 Requires macOS 11+ on Apple Silicon.
 
-Build the app:
-
 ```bash
+conda activate SkyDict
 ./build.sh --install
 ```
 
 That produces `SkyDict.app`, signs it and copies it to `/Applications`. Launch it and a
-🎙 appears in the menubar.
+🎙 appears in the menubar. Set `PYTHON=/path/to/python` if the interpreter you want to
+build with is not first on `PATH`.
 
-To work on the code instead, install it in a Python 3.10+ environment:
+Then grant Accessibility — see [Permissions](#permissions) — otherwise the hotkey does
+nothing and dictations only reach the clipboard.
+
+To work on the code instead of building:
 
 ```bash
-conda activate SkyDict
 pip install -e ".[dev,macos]"
 ```
 
@@ -115,10 +119,13 @@ SkyDict follows.
 **Accessibility** — needed to watch for the hotkey and to paste. Without it SkyDict falls
 back to leaving the text on the clipboard, and says so.
 
-Enable **SkyDict** in System Settings › Privacy & Security › Accessibility, then restart
-it. Running from a terminal instead of the built app, enable the *terminal app* there:
-macOS attributes the permission to whatever launched the process, and a bare script has
-no identity of its own.
+Enable **SkyDict** in System Settings › Privacy & Security › Accessibility, then **restart
+the app** — the permission is only picked up when the process starts.
+
+Permissions are granted per binary, to the app that launched the process. So running from
+a terminal, the entry to enable is the *terminal app*, not the Python interpreter — and
+`skydict permissions` reports whatever is running it, not the state of a built
+`SkyDict.app`. Check that one from its own **Permissions…** menu item.
 
 The build signs the bundle ad-hoc, which macOS requires before it will load the bundled
 libraries at all. Be aware that an ad-hoc signature changes with every build: macOS
@@ -144,10 +151,35 @@ exponential backoff on 429 and 5xx, honouring the server's `Retry-After`.
 onnxruntime: no torch, no ffmpeg. It serves GigaAM, Whisper, Parakeet, Vosk and T-one.
 The GigaAM `e2e` variants return punctuated, normalised Russian text directly.
 
+## How it works
+
+Audio moves through the app as 16 kHz mono float32 — the native input rate for both
+Whisper and GigaAM, so nothing is ever resampled. `stt/base.py` defines the one interface
+both backends implement; everything above it is backend-agnostic.
+
+The hotkey uses a `CGEventTap` rather than `NSEvent`'s global monitor, which never reports
+key-up — and hold-to-talk is defined by the release. Press and release are read from
+IOKit's device-dependent modifier bits, not the public `kCGEventFlagMask*` ones: those
+only say "some Option is down", so holding both Options and releasing one would lose the
+release and leave the recording stuck on. The tap is listen-only and its callback returns
+immediately, handing transcription to a worker thread, because macOS disables a tap that
+blocks.
+
+Auto-stop drives Silero VAD directly, one 512-sample window at a time with the recurrent
+state carried between windows. onnx-asr bundles the same model, but segments a finished
+waveform in one batch — the opposite of what stopping on silence needs.
+
+Pasting saves the clipboard, writes the text, synthesises Cmd+V and restores the
+original, including non-text representations.
+
+The menubar app keeps every AppKit call on the main thread by construction: pipeline
+events arrive on the audio and transcription threads and are pushed onto a queue that a
+rumps timer drains. That also makes the UI logic testable without an event loop.
+
 ## Development
 
 ```bash
-pytest              # 152 fast tests, no network, microphone or permissions
+pytest              # 190 fast tests, no network, microphone or permissions
 pytest -m slow      # 6 more against the real GigaAM and Silero weights
 ruff check .
 ```
@@ -163,6 +195,10 @@ regenerate it with:
 ```bash
 say -v Milena -o /tmp/sample.aiff "Привет! Это тестовая запись для проверки распознавания речи в приложении SkyDict." && afconvert -f WAVE -d LEI16@16000 -c 1 /tmp/sample.aiff tests/data/sample_ru.wav
 ```
+
+One thing the suite cannot cover: the hotkey and pasting need Accessibility, which is
+granted to a *binary*, so they have to be tried by hand from a terminal you have granted
+or from the built app.
 
 ## License
 
