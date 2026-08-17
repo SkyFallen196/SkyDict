@@ -18,12 +18,20 @@ rm -rf build dist
 echo "==> Building with py2app"
 "$PYTHON" setup.py py2app
 
-# py2app 0.28 cannot sign the finished bundle itself. The signature is not about trust
-# here — an ad-hoc one is enough — but about identity: macOS keys the Accessibility and
-# Microphone grants to it, and an unsigned bundle gets a new identity on every build,
-# so the user would have to re-grant permission after each one.
-echo "==> Signing (ad-hoc)"
-codesign --force --deep --sign - "$APP"
+# py2app 0.28 cannot sign the finished bundle itself, and macOS refuses to load an
+# unsigned bundle's libraries at all, so this step is not optional.
+#
+# Note that an ad-hoc signature does NOT survive a rebuild: macOS tracks the app by the
+# hash of its contents, which changes with every build, so the Accessibility grant has to
+# be renewed each time (toggle SkyDict off and on in System Settings). Only a real
+# signing identity gives a stable one — see README.
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+if [[ "$SIGN_IDENTITY" == "-" ]]; then
+    echo "==> Signing (ad-hoc; permissions must be re-granted after each build)"
+else
+    echo "==> Signing as '$SIGN_IDENTITY'"
+fi
+codesign --force --deep --sign "$SIGN_IDENTITY" "$APP"
 codesign --verify --verbose=1 "$APP"
 
 echo "==> Built $APP ($(du -sh "$APP" | cut -f1))"

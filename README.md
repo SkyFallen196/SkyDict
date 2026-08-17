@@ -120,8 +120,20 @@ it. Running from a terminal instead of the built app, enable the *terminal app* 
 macOS attributes the permission to whatever launched the process, and a bare script has
 no identity of its own.
 
-The build signs the bundle ad-hoc. That is not about trust — it gives the app a stable
-identity, so macOS remembers the grant instead of asking again after every rebuild.
+The build signs the bundle ad-hoc, which macOS requires before it will load the bundled
+libraries at all. Be aware that an ad-hoc signature changes with every build: macOS
+identifies the app by the hash of its contents, so **after each rebuild the Accessibility
+grant has to be renewed** — toggle SkyDict off and on in that list.
+
+To stop that, sign with a self-signed certificate instead. Create one once in Keychain
+Access (Certificate Assistant › Create a Certificate, type "Code Signing"), then build
+with its name:
+
+```bash
+SIGN_IDENTITY="My SkyDict Cert" ./build.sh
+```
+
+The identity stays the same across builds, and so does the permission.
 
 ## Backends
 

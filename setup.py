@@ -56,6 +56,10 @@ PACKAGES = [
     "keyring",
     "rumps",
     "sounddevice",
+    # Ships libportaudio.dylib. Listing it as a package keeps it out of the zipped
+    # library — dlopen cannot read from inside a zip, so recording failed with "cannot
+    # load library" the moment the hotkey was pressed.
+    "_sounddevice_data",
     "platformdirs",
 ]
 
