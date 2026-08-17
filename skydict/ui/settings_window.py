@@ -21,12 +21,12 @@ from ..secrets import get_key, set_key
 
 log = logging.getLogger(__name__)
 
-WINDOW_WIDTH = 520
-WINDOW_HEIGHT = 460
+WINDOW_WIDTH = 540
+WINDOW_HEIGHT = 380
 MARGIN = 20
-ROW_HEIGHT = 32
-LABEL_WIDTH = 150
-FIELD_WIDTH = WINDOW_WIDTH - LABEL_WIDTH - MARGIN * 3
+#: Minimum width for the control column. NSGridView sizes rows itself; this only stops
+#: a form of short values from collapsing into a narrow strip.
+FIELD_WIDTH = 300
 
 
 @dataclass(slots=True)
@@ -138,29 +138,15 @@ class SettingsWindow:
             log.warning("Could not list input devices: %s", exc)
         return choices
 
-    def _make_row(self, container, spec: Field, top: float) -> None:
-        from AppKit import (
-            NSButton,
-            NSFont,
-            NSPopUpButton,
-            NSSecureTextField,
-            NSSwitchButton,
-            NSTextField,
-        )
+    def _make_control(self, spec: Field):
+        """Build the input widget for one field, already populated from settings."""
+        from AppKit import NSButton, NSPopUpButton, NSSecureTextField, NSSwitchButton, NSTextField
         from Foundation import NSMakeRect
-
-        label = NSTextField.labelWithString_(spec.label)
-        label.setFrame_(NSMakeRect(MARGIN, top, LABEL_WIDTH, 20))
-        label.setAlignment_(2)  # right
-        container.addSubview_(label)
-
-        x = MARGIN * 2 + LABEL_WIDTH
-        widget = None
 
         if spec.kind in {"choice", "device"}:
             choices = self._device_choices() if spec.kind == "device" else spec.choices
             widget = NSPopUpButton.alloc().initWithFrame_pullsDown_(
-                NSMakeRect(x, top - 4, FIELD_WIDTH, 26), False
+                NSMakeRect(0, 0, FIELD_WIDTH, 25), False
             )
             for _value, title in choices:
                 widget.addItemWithTitle_(title)
@@ -171,46 +157,78 @@ class SettingsWindow:
             current = "" if current is None else str(current)
             if current in values:
                 widget.selectItemAtIndex_(values.index(current))
+            return widget
 
-        elif spec.kind == "checkbox":
-            widget = NSButton.alloc().initWithFrame_(NSMakeRect(x, top - 2, FIELD_WIDTH, 22))
+        if spec.kind == "checkbox":
+            widget = NSButton.alloc().initWithFrame_(NSMakeRect(0, 0, FIELD_WIDTH, 22))
             widget.setButtonType_(NSSwitchButton)
             widget.setTitle_("")
             widget.setState_(bool(get_path(self.settings, spec.path)))
+            return widget
 
+        factory = NSSecureTextField if spec.kind == "secret" else NSTextField
+        widget = factory.alloc().initWithFrame_(NSMakeRect(0, 0, FIELD_WIDTH, 22))
+        if spec.path.endswith("__api_key__"):
+            stored = get_key(self.settings.cloud.credential_name)
+            widget.setStringValue_(stored or "")
+            widget.setPlaceholderString_("Not set")
         else:
-            factory = NSSecureTextField if spec.kind == "secret" else NSTextField
-            widget = factory.alloc().initWithFrame_(NSMakeRect(x, top - 3, FIELD_WIDTH, 24))
-            if spec.path.endswith("__api_key__"):
-                stored = get_key(self.settings.cloud.credential_name)
-                widget.setStringValue_(stored or "")
-                widget.setPlaceholderString_("Not set")
-            else:
-                value = get_path(self.settings, spec.path)
-                widget.setStringValue_("" if value is None else str(value))
-
-        container.addSubview_(widget)
-        self._widgets[spec.path] = widget
-
-        if spec.help:
-            hint = NSTextField.labelWithString_(spec.help)
-            hint.setFrame_(NSMakeRect(x, top - 22, FIELD_WIDTH, 16))
-            hint.setFont_(NSFont.systemFontOfSize_(10))
-            hint.setTextColor_(_secondary_colour())
-            container.addSubview_(hint)
+            value = get_path(self.settings, spec.path)
+            widget.setStringValue_("" if value is None else str(value))
+        return widget
 
     def _build_tab(self, specs: list[Field]):
-        from AppKit import NSView
+        """Lay a tab out with NSGridView.
+
+        Hand-computed frames were the earlier approach and they drifted: the coordinates
+        were derived from the window, but each tab view has its own smaller coordinate
+        space, so rows crept upward and labels sat off their controls. A grid sizes and
+        aligns its own rows, and stays right when fonts or accessibility sizes change.
+        """
+        from AppKit import (
+            NSFont,
+            NSGridCell,
+            NSGridCellPlacementFill,
+            NSGridCellPlacementTrailing,
+            NSGridRowAlignmentFirstBaseline,
+            NSGridView,
+            NSTextField,
+            NSView,
+        )
         from Foundation import NSMakeRect
 
-        view = NSView.alloc().initWithFrame_(
-            NSMakeRect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT - 100)
-        )
-        top = WINDOW_HEIGHT - 160
+        rows: list[list] = []
         for spec in specs:
-            self._make_row(view, spec, top)
-            top -= ROW_HEIGHT + (14 if spec.help else 0)
-        return view
+            label = NSTextField.labelWithString_(spec.label)
+            control = self._make_control(spec)
+            # Without this the grid shrinks every control to fit its current text.
+            control.widthAnchor().constraintGreaterThanOrEqualToConstant_(
+                FIELD_WIDTH
+            ).setActive_(True)
+            self._widgets[spec.path] = control
+            rows.append([label, control])
+
+            if spec.help:
+                hint = NSTextField.labelWithString_(spec.help)
+                hint.setFont_(NSFont.systemFontOfSize_(11))
+                hint.setTextColor_(_secondary_colour())
+                # Empty first cell keeps the hint under its control, not under the label.
+                rows.append([NSGridCell.emptyContentView(), hint])
+
+        grid = NSGridView.gridViewWithViews_(rows)
+        grid.setTranslatesAutoresizingMaskIntoConstraints_(False)
+        grid.setRowSpacing_(10)
+        grid.setColumnSpacing_(12)
+        grid.columnAtIndex_(0).setXPlacement_(NSGridCellPlacementTrailing)
+        grid.columnAtIndex_(1).setXPlacement_(NSGridCellPlacementFill)
+        grid.setRowAlignment_(NSGridRowAlignmentFirstBaseline)
+
+        container = NSView.alloc().initWithFrame_(
+            NSMakeRect(0, 0, WINDOW_WIDTH - MARGIN * 2, WINDOW_HEIGHT - 120)
+        )
+        container.addSubview_(grid)
+        _pin_to_top(grid, container)
+        return container
 
     def build(self):
         from AppKit import (
@@ -353,6 +371,24 @@ def _secondary_colour():
     from AppKit import NSColor
 
     return NSColor.secondaryLabelColor()
+
+
+def _pin_to_top(view, container, inset: float = MARGIN) -> None:
+    """Anchor a view to the top of its container, leaving it free to size itself."""
+    container.addConstraints_(
+        [
+            view.topAnchor().constraintEqualToAnchor_constant_(
+                container.topAnchor(), inset
+            ),
+            view.leadingAnchor().constraintGreaterThanOrEqualToAnchor_constant_(
+                container.leadingAnchor(), inset
+            ),
+            view.trailingAnchor().constraintLessThanOrEqualToAnchor_constant_(
+                container.trailingAnchor(), -inset
+            ),
+            view.centerXAnchor().constraintEqualToAnchor_(container.centerXAnchor()),
+        ]
+    )
 
 
 class _ActionProxy:

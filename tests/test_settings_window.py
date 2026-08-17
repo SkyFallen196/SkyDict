@@ -147,6 +147,42 @@ class TestAgainstAppKit:
         SettingsWindow(Settings()).build()
         SettingsWindow(Settings()).build()
 
+    def test_controls_are_laid_out_in_evenly_spaced_rows(self, window):
+        """Hand-computed frames drifted because each tab has its own coordinate space,
+        leaving labels sitting off their controls. The grid must produce even rows."""
+        window._window.contentView().layoutSubtreeIfNeeded()
+
+        general = ["trigger_mode", "backend", "audio.input_device"]
+        tops = [window._widgets[path].frame().origin.y for path in general]
+
+        assert all(y > 0 for y in tops[:-1]), "rows collapsed to the origin"
+        gaps = {round(tops[i] - tops[i + 1]) for i in range(len(tops) - 1)}
+        assert len(gaps) == 1, f"uneven row spacing: {gaps}"
+
+    def test_controls_share_a_width_instead_of_hugging_their_text(self, window):
+        window._window.contentView().layoutSubtreeIfNeeded()
+
+        widths = {
+            round(window._widgets[path].frame().size.width)
+            for path in ("trigger_mode", "backend", "audio.input_device")
+        }
+
+        assert len(widths) == 1
+        assert widths.pop() >= 300
+
+    def test_every_tab_lays_its_controls_out(self, window):
+        tabs = [
+            view
+            for view in window._window.contentView().subviews()
+            if view.__class__.__name__ == "NSTabView"
+        ][0]
+
+        for index in range(len(FIELDS)):
+            tabs.selectTabViewItemAtIndex_(index)
+            window._window.contentView().layoutSubtreeIfNeeded()
+
+            assert all(w.frame().size.width > 0 for w in window._widgets.values())
+
     def test_the_window_is_not_freed_when_closed(self, window):
         """Cocoa frees a window on close by default, dangling the second open."""
         assert not window._window.isReleasedWhenClosed()
