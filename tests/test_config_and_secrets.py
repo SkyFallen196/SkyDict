@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -50,7 +52,55 @@ def test_invalid_values_are_rejected(tmp_path):
     path.write_text('{"vad": {"silence_duration": -1}}')
 
     with pytest.raises(ValidationError):
-        Settings.load(path)
+        Settings.load(path, strict=True)
+
+
+def test_save_refuses_to_write_an_unloadable_config(tmp_path):
+    """pydantic does not validate assignments, so an out-of-range value from the settings
+    form would be written happily and then break every later load."""
+    path = tmp_path / "config.json"
+    settings = Settings()
+    settings.vad.silence_duration = -5.0
+
+    with pytest.raises(ValidationError):
+        settings.save(path)
+
+    assert not path.exists()
+
+
+def test_save_leaves_an_existing_config_intact_when_rejected(tmp_path):
+    path = tmp_path / "config.json"
+    Settings().save(path)
+    good = path.read_text()
+
+    broken = Settings()
+    broken.vad.speech_threshold = 5.0  # bounded to [0, 1]
+    with pytest.raises(ValidationError):
+        broken.save(path)
+
+    assert path.read_text() == good
+
+
+def test_load_falls_back_to_defaults_on_a_corrupt_file(tmp_path, caplog):
+    """Settings are read at startup; refusing to start over one bad number would leave
+    the user no way to fix it."""
+    path = tmp_path / "config.json"
+    path.write_text('{"vad": {"silence_duration": -1}}')
+
+    settings = Settings.load(path)
+
+    assert settings.vad.silence_duration == Settings().vad.silence_duration
+    assert "Ignoring invalid settings" in caplog.text
+
+
+def test_load_falls_back_on_malformed_json(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text("{not json at all")
+
+    assert Settings.load(path).backend == "cloud"
+
+    with pytest.raises(json.JSONDecodeError):
+        Settings.load(path, strict=True)
 
 
 def test_env_var_overrides_keychain(monkeypatch):

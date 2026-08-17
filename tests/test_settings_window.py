@@ -199,6 +199,37 @@ class TestAgainstAppKit:
 
         assert NSApp.activationPolicy() == NSApplicationActivationPolicyAccessory
 
+    def test_a_bad_value_keeps_the_window_open_and_saves_nothing(self, monkeypatch):
+        """Saving -5 used to write a config that could never be loaded again, so the app
+        refused to start with no clue why."""
+        saved: list[Settings] = []
+        alerts: list[str] = []
+        window = SettingsWindow(Settings(), on_save=saved.append)
+        window.build()
+        monkeypatch.setattr(
+            window, "_show_validation_error", lambda exc: alerts.append(str(exc))
+        )
+        window.show()
+
+        window._widgets["vad.silence_duration"].setStringValue_("-5")
+        window.save()
+
+        assert alerts, "the user was told nothing"
+        assert saved == [], "an invalid config was handed to the app"
+        assert window._window.isVisible(), "the window closed on a rejected form"
+
+    def test_a_good_value_still_saves_and_closes(self):
+        saved: list[Settings] = []
+        window = SettingsWindow(Settings(), on_save=saved.append)
+        window.build()
+        window.show()
+
+        window._widgets["vad.silence_duration"].setStringValue_("2.5")
+        window.save()
+
+        assert saved and saved[0].vad.silence_duration == 2.5
+        assert not window._window.isVisible()
+
     def test_the_save_button_reaches_the_callback(self):
         saved: list[Settings] = []
         window = SettingsWindow(Settings(), on_save=saved.append)

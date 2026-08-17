@@ -15,6 +15,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import ValidationError
+
 from ..audio.recorder import list_devices
 from ..config import Settings
 from ..secrets import get_key, set_key
@@ -312,13 +314,37 @@ class SettingsWindow:
 
     def save(self) -> None:
         settings, api_key = self.collect()
-        settings.save()
+
+        try:
+            settings.save()
+        except ValidationError as exc:
+            # Keep the window open on a bad value: closing it would strand the user with
+            # a rejected form and no idea which field was wrong.
+            self._show_validation_error(exc)
+            return
+
         if api_key:
             set_key(settings.cloud.credential_name, api_key)
         if self.on_save is not None:
             self.on_save(settings)
         if self._window is not None:
             self._window.close()
+
+    def _show_validation_error(self, exc: ValidationError) -> None:
+        from AppKit import NSAlert, NSAlertStyleWarning
+
+        problems = "\n".join(
+            f"• {'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
+            for error in exc.errors()
+        )
+        log.warning("Rejected settings:\n%s", problems)
+
+        alert = NSAlert.alloc().init()
+        alert.setAlertStyle_(NSAlertStyleWarning)
+        alert.setMessageText_("These settings could not be saved")
+        alert.setInformativeText_(problems)
+        alert.addButtonWithTitle_("OK")
+        alert.runModal()
 
     def show(self) -> None:
         """Bring the window up, borrowing a regular app's focus behaviour.

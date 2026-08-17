@@ -57,7 +57,13 @@ def _report_missing_credential(exc: MissingCredentialError) -> None:
 
 
 def _load_settings(backend: BackendName | None, model: str | None) -> Settings:
-    settings = Settings.load()
+    # strict: a hand-edited config should report its own mistake here rather than being
+    # silently replaced by defaults, which would look like the edit did nothing.
+    try:
+        settings = Settings.load(strict=True)
+    except Exception as exc:
+        typer.secho(f"Invalid settings in {config_path()}:\n{exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from exc
     if backend:
         settings.backend = backend
     if model:

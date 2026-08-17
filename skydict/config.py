@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Literal
 
 from platformdirs import user_data_path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from . import APP_NAME
+
+log = logging.getLogger(__name__)
 
 BackendName = Literal["cloud", "local"]
 TriggerMode = Literal["hold", "toggle", "hold_vad"]
@@ -89,14 +92,35 @@ class Settings(BaseModel):
     vad: VadSettings = Field(default_factory=VadSettings)
 
     @classmethod
-    def load(cls, path: Path | None = None) -> Settings:
-        """Read settings from disk, falling back to defaults when the file is absent."""
+    def load(cls, path: Path | None = None, strict: bool = False) -> Settings:
+        """Read settings from disk, falling back to defaults when the file is absent.
+
+        A corrupt or invalid file falls back to defaults with a warning rather than
+        raising: settings are read at startup, and refusing to start over one bad number
+        leaves the user with no way to fix it. Pass ``strict`` to surface the error
+        instead — the CLI does, so a hand-edited file reports its own mistake.
+        """
         path = path or config_path()
         if not path.exists():
             return cls()
-        return cls.model_validate(json.loads(path.read_text(encoding="utf-8")))
+
+        try:
+            return cls.model_validate(json.loads(path.read_text(encoding="utf-8")))
+        except (json.JSONDecodeError, ValidationError):
+            if strict:
+                raise
+            log.warning("Ignoring invalid settings at %s; using defaults", path, exc_info=True)
+            return cls()
 
     def save(self, path: Path | None = None) -> Path:
+        """Write the settings out.
+
+        Validates first: pydantic does not check assignments, so an out-of-range value
+        set from the settings form would otherwise be written happily and then break
+        every later load.
+        """
+        self.model_validate(self.model_dump())
+
         path = path or config_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
