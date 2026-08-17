@@ -7,16 +7,27 @@ text lands in whatever you were typing into. Speech recognition runs either thro
 OpenAI-compatible endpoint (Groq, OpenAI, a self-hosted vLLM) or fully offline on a local
 Hugging Face model such as GigaAM v3.
 
-> **Status:** stage 3 — runs as a menubar app with a settings window and dictation
-> history. LLM post-processing and a packaged `.app` come next.
+> **Status:** stage 4 — builds into a standalone `SkyDict.app`. LLM post-processing
+> ("modes") is the remaining piece.
 
 ## Install
 
-Requires Python 3.10+ on macOS.
+Requires macOS 11+ on Apple Silicon.
+
+Build the app:
+
+```bash
+./build.sh --install
+```
+
+That produces `SkyDict.app`, signs it and copies it to `/Applications`. Launch it and a
+🎙 appears in the menubar.
+
+To work on the code instead, install it in a Python 3.10+ environment:
 
 ```bash
 conda activate SkyDict
-pip install -e ".[dev]"
+pip install -e ".[dev,macos]"
 ```
 
 ## Configure
@@ -104,10 +115,13 @@ SkyDict follows.
 **Accessibility** — needed to watch for the hotkey and to paste. Without it SkyDict falls
 back to leaving the text on the clipboard, and says so.
 
-Running from a terminal, the entry to enable in System Settings › Privacy & Security ›
-Accessibility is usually the *terminal app*, not the Python interpreter: macOS attributes
-the permission to whatever launched the process. An unbundled script has no identity of
-its own, so a packaged `.app` will get its own entry later.
+Enable **SkyDict** in System Settings › Privacy & Security › Accessibility, then restart
+it. Running from a terminal instead of the built app, enable the *terminal app* there:
+macOS attributes the permission to whatever launched the process, and a bare script has
+no identity of its own.
+
+The build signs the bundle ad-hoc. That is not about trust — it gives the app a stable
+identity, so macOS remembers the grant instead of asking again after every rebuild.
 
 ## Backends
 

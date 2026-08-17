@@ -398,6 +398,20 @@ class TestSettingsWindow:
         app._settings_saved(Settings())  # must not raise
 
 
+def test_settings_are_loaded_from_disk_when_none_are_passed(isolated_app_support):
+    """The bundled app constructs SkyDictApp with no arguments, and defaults would
+    silently ignore everything the user had configured."""
+    stored = Settings()
+    stored.backend = "local"
+    stored.trigger_mode = "toggle"
+    stored.save()
+
+    app = SkyDictApp(controller=FakeController(stored), history=History())
+
+    assert app.settings.backend == "local"
+    assert app.settings.trigger_mode == "toggle"
+
+
 def test_result_callback_is_wired_to_the_session(tmp_path, monkeypatch):
     monkeypatch.setattr(Settings, "save", lambda self, path=None: path)
     settings = Settings()

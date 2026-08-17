@@ -18,6 +18,7 @@ its own. A packaged .app gets its own entry.
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import sys
 
@@ -33,6 +34,15 @@ class PermissionError_(RuntimeError):
     def __init__(self, message: str, pane: str | None = None) -> None:
         super().__init__(message)
         self.pane = pane
+
+
+def running_in_bundle() -> bool:
+    """Whether this process is inside a packaged .app.
+
+    py2app sets this in the bundle's boot script; it is the difference between "enable
+    SkyDict" and "enable your terminal" in the instructions below.
+    """
+    return "RESOURCEPATH" in os.environ or ".app/Contents/" in sys.executable
 
 
 def host_process_name() -> str:
@@ -86,12 +96,17 @@ def request_accessibility() -> bool:
 
 
 def _accessibility_message(what: str) -> str:
+    if running_in_bundle():
+        who = "Enable SkyDict in the list."
+    else:
+        who = (
+            "Running from a terminal, the entry to enable is the terminal app itself "
+            f"rather than the interpreter ({host_process_name()}) — macOS attributes "
+            "the permission to the app that launched the process."
+        )
     return (
         f"Accessibility permission is required to {what}.\n"
-        "Grant it in System Settings › Privacy & Security › Accessibility.\n"
-        "When running from a terminal, the entry to enable is usually the terminal app "
-        f"itself rather than the interpreter ({host_process_name()}), because macOS "
-        "attributes the permission to the app that launched the process.\n"
+        f"Grant it in System Settings › Privacy & Security › Accessibility. {who}\n"
         "Then restart SkyDict."
     )
 

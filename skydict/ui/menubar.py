@@ -56,7 +56,9 @@ class SkyDictApp:
         controller: DictationController | None = None,
         history: History | None = None,
     ) -> None:
-        self.settings = settings or Settings()
+        # Load from disk when nothing is passed: the bundled app constructs this with no
+        # arguments, and defaults would quietly ignore everything the user configured.
+        self.settings = settings if settings is not None else Settings.load()
         self.history = history if history is not None else History()
         self.clipboard = Clipboard()
         self.controller = controller or DictationController(
