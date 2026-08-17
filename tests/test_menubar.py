@@ -311,6 +311,51 @@ class TestSettingsWindow:
 
         assert app._settings_window is first
 
+    def test_a_menu_change_updates_the_open_window(self, app, monkeypatch):
+        """Otherwise the form keeps showing the old value and puts it back on Save."""
+        monkeypatch.setattr(
+            "skydict.ui.settings_window.SettingsWindow.show",
+            lambda self: self.build() if self._window is None else None,
+        )
+        app._open_settings(None)
+        window = app._settings_window
+        window._window.makeKeyAndOrderFront_(None)
+
+        app.set_mode("toggle")
+        app.set_backend("local")
+
+        def shown(path: str) -> str:
+            return window._choice_values[path][window._widgets[path].indexOfSelectedItem()]
+
+        assert shown("trigger_mode") == "toggle"
+        assert shown("backend") == "local"
+
+    def test_saving_a_synced_window_does_not_undo_the_menu_change(self, app, monkeypatch):
+        monkeypatch.setattr(
+            "skydict.ui.settings_window.SettingsWindow.show",
+            lambda self: self.build() if self._window is None else None,
+        )
+        app._open_settings(None)
+        app._settings_window._window.makeKeyAndOrderFront_(None)
+
+        app.set_mode("toggle")
+        app._settings_window.save()
+
+        assert app.settings.trigger_mode == "toggle"
+        assert app.controller.settings.trigger_mode == "toggle"
+
+    def test_a_closed_window_is_not_touched_by_menu_changes(self, app, monkeypatch):
+        monkeypatch.setattr(
+            "skydict.ui.settings_window.SettingsWindow.show",
+            lambda self: self.build() if self._window is None else None,
+        )
+        app._open_settings(None)
+        app._settings_window.close()
+
+        app.set_mode("toggle")  # must not raise on a closed window
+
+        assert app.settings.trigger_mode == "toggle"
+
     def test_settings_saved_from_the_window_reach_the_controller(self, app):
         """Rebinding app.settings left the controller and session on the old object, so
         picking Toggle in the window left the hotkey still behaving as Hold."""

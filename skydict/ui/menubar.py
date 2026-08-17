@@ -211,11 +211,8 @@ class SkyDictApp:
             return
         self.settings.backend = name
         self.settings.save()
-
-        for candidate in ("cloud", "local"):
-            item = self._menu_items.get(f"backend:{candidate}")
-            if item is not None:
-                item.state = candidate == name
+        self._sync_menu_state()
+        self._sync_settings_window()
 
         try:
             self.controller.rebuild_backend()
@@ -234,10 +231,8 @@ class SkyDictApp:
     def set_mode(self, mode: TriggerMode) -> None:
         self.settings.trigger_mode = mode
         self.settings.save()
-        for candidate in ("hold", "toggle", "hold_vad"):
-            item = self._menu_items.get(f"mode:{candidate}")
-            if item is not None:
-                item.state = candidate == mode
+        self._sync_menu_state()
+        self._sync_settings_window()
 
     def _open_settings(self, _sender) -> None:
         from .settings_window import SettingsWindow
@@ -288,6 +283,18 @@ class SkyDictApp:
             item = self._menu_items.get(f"mode:{mode}")
             if item is not None:
                 item.state = self.settings.trigger_mode == mode
+
+    def _sync_settings_window(self) -> None:
+        """Push a menu-driven change into an open settings window.
+
+        The window works on its own copy, so without this it would still show the old
+        value and put it back on the next Save. Any unsaved edits in the form are lost,
+        which is the right trade: the menu is the more recent instruction.
+        """
+        window = self._settings_window
+        if window is None or window._window is None or not window._window.isVisible():
+            return
+        window.load_values(self.settings)
 
     def _show_permissions(self, _sender) -> None:
         import rumps

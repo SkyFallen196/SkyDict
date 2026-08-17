@@ -144,7 +144,7 @@ class SettingsWindow:
         return choices
 
     def _make_control(self, spec: Field):
-        """Build the input widget for one field, already populated from settings."""
+        """Build the empty input widget for one field. Values come from load_values."""
         from AppKit import NSButton, NSPopUpButton, NSSecureTextField, NSSwitchButton, NSTextField
         from Foundation import NSMakeRect
 
@@ -155,32 +155,50 @@ class SettingsWindow:
             )
             for _value, title in choices:
                 widget.addItemWithTitle_(title)
-            values = [value for value, _ in choices]
-            self._choice_values[spec.path] = values
-
-            current = get_path(self.settings, spec.path) if "__" not in spec.path else None
-            current = "" if current is None else str(current)
-            if current in values:
-                widget.selectItemAtIndex_(values.index(current))
+            self._choice_values[spec.path] = [value for value, _ in choices]
             return widget
 
         if spec.kind == "checkbox":
             widget = NSButton.alloc().initWithFrame_(NSMakeRect(0, 0, FIELD_WIDTH, 22))
             widget.setButtonType_(NSSwitchButton)
             widget.setTitle_("")
-            widget.setState_(bool(get_path(self.settings, spec.path)))
             return widget
 
         factory = NSSecureTextField if spec.kind == "secret" else NSTextField
         widget = factory.alloc().initWithFrame_(NSMakeRect(0, 0, FIELD_WIDTH, 22))
-        if spec.path.endswith("__api_key__"):
-            stored = get_key(self.settings.cloud.credential_name)
-            widget.setStringValue_(stored or "")
+        if spec.kind == "secret":
             widget.setPlaceholderString_("Not set")
-        else:
-            value = get_path(self.settings, spec.path)
-            widget.setStringValue_("" if value is None else str(value))
         return widget
+
+    def load_values(self, settings: Settings | None = None) -> None:
+        """Fill every widget from settings.
+
+        Called once when the window is built, and again whenever the menubar changes
+        something while the window is open — otherwise the form would show stale values
+        and undo that change on the next Save.
+        """
+        if settings is not None:
+            self.settings = settings.model_copy(deep=True)
+
+        for path, widget in self._widgets.items():
+            if path.endswith("__api_key__"):
+                widget.setStringValue_(get_key(self.settings.cloud.credential_name) or "")
+                continue
+
+            value = get_path(self.settings, path)
+
+            if path in self._choice_values:
+                current = "" if value is None else str(value)
+                values = self._choice_values[path]
+                if current in values:
+                    widget.selectItemAtIndex_(values.index(current))
+                continue
+
+            spec = self._spec_for(path)
+            if spec is not None and spec.kind == "checkbox":
+                widget.setState_(bool(value))
+            else:
+                widget.setStringValue_("" if value is None else str(value))
 
     def _build_tab(self, specs: list[Field]):
         """Lay a tab out with NSGridView.
@@ -297,6 +315,7 @@ class SettingsWindow:
         self._status_label = status
 
         self._window = window
+        self.load_values()
         return window
 
     # ------------------------------------------------------------------ saving
