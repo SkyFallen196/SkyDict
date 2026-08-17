@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# py2app build output
+build/
+dist/
+*.egg-info/
+assets/*.iconset/
+assets/icon_1024.png
