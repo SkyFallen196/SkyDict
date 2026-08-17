@@ -322,11 +322,27 @@ def permissions(
             "MISSING", fg=typer.colors.RED
         )
 
+    # macOS grants permissions per binary, and this command runs as the interpreter, not
+    # as SkyDict.app. Saying so avoids reading these as the built app's status.
+    typer.secho(
+        "Permissions belong to whichever app runs the code. These are for this "
+        "process, not for a built SkyDict.app — check that one from its own "
+        "Permissions… menu.",
+        fg=typer.colors.YELLOW,
+        err=True,
+    )
+    typer.echo()
+
     mic = check_microphone()
     typer.echo(f"Microphone:          {mark(mic == 'authorized')}  ({mic})")
     typer.echo(f"Hotkey (listen):     {mark(check_listen_access())}")
     typer.echo(f"Paste (post events): {mark(check_post_access())}")
-    typer.echo(f"\nInterpreter: {host_process_name()}")
+    typer.echo(f"\nRunning as: {host_process_name()}")
+    if mic == "not_determined":
+        typer.echo(
+            "Microphone shows 'not_determined' because this binary has never asked for "
+            "it; macOS prompts on the first recording."
+        )
 
     if not check_listen_access() or not check_post_access():
         typer.echo(
