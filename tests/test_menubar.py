@@ -260,6 +260,50 @@ class TestRecentMenu:
         assert titles[0] == "через очередь"
 
 
+class TestSettingsWindow:
+    """Opening Settings from the menu. The window was originally built into a local
+    variable, so Python collected it — along with its widgets and the Save button's
+    target — the moment the click handler returned, and nothing usable appeared."""
+
+    def test_the_window_is_kept_alive_after_the_click(self, app, monkeypatch):
+        import gc
+
+        shown: list[str] = []
+        monkeypatch.setattr(
+            "skydict.ui.settings_window.SettingsWindow.show",
+            lambda self: shown.append("shown"),
+        )
+
+        app._open_settings(None)
+        gc.collect()
+
+        assert shown == ["shown"]
+        assert app._settings_window is not None
+
+    def test_reopening_reuses_the_same_window(self, app, monkeypatch):
+        monkeypatch.setattr("skydict.ui.settings_window.SettingsWindow.show", lambda self: None)
+
+        app._open_settings(None)
+        first = app._settings_window
+        app._open_settings(None)
+
+        assert app._settings_window is first
+
+    def test_saving_applies_the_new_settings(self, app):
+        new = Settings()
+        new.backend = "local"
+
+        app._settings_saved(new)
+
+        assert app.settings.backend == "local"
+        assert app.controller.rebuilt == 1
+
+    def test_a_failing_rebuild_after_save_is_swallowed(self, app):
+        app.controller.rebuild_error = RuntimeError("model gone")
+
+        app._settings_saved(Settings())  # must not raise
+
+
 def test_result_callback_is_wired_to_the_session(tmp_path, monkeypatch):
     monkeypatch.setattr(Settings, "save", lambda self, path=None: path)
     settings = Settings()

@@ -71,6 +71,7 @@ class SkyDictApp:
         self._events: queue.Queue[tuple[str, object]] = queue.Queue()
         self.app = None
         self._menu_items: dict[str, object] = {}
+        self._settings_window = None
         self.last_error: Exception | None = None
 
     # ------------------------------------------------------------------ callbacks
@@ -241,7 +242,13 @@ class SkyDictApp:
     def _open_settings(self, _sender) -> None:
         from .settings_window import SettingsWindow
 
-        SettingsWindow(self.settings, on_save=self._settings_saved).show()
+        # Held on the app, not a local: dropping the last Python reference would let the
+        # window, its widgets and the Save button's target be collected on the way out.
+        if self._settings_window is None:
+            self._settings_window = SettingsWindow(
+                self.settings, on_save=self._settings_saved
+            )
+        self._settings_window.show()
 
     def _settings_saved(self, settings: Settings) -> None:
         self.settings = settings

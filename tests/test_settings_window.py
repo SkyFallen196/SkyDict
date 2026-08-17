@@ -147,6 +147,22 @@ class TestAgainstAppKit:
         SettingsWindow(Settings()).build()
         SettingsWindow(Settings()).build()
 
+    def test_the_window_is_not_freed_when_closed(self, window):
+        """Cocoa frees a window on close by default, dangling the second open."""
+        assert not window._window.isReleasedWhenClosed()
+
+    def test_closing_restores_the_menubar_activation_policy(self, window, monkeypatch):
+        from AppKit import NSApp, NSApplicationActivationPolicyAccessory
+
+        NSApp.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
+
+        window.show()
+        assert NSApp.activationPolicy() != NSApplicationActivationPolicyAccessory
+
+        window._delegate.windowWillClose_(None)
+
+        assert NSApp.activationPolicy() == NSApplicationActivationPolicyAccessory
+
     def test_the_save_button_reaches_the_callback(self):
         saved: list[Settings] = []
         window = SettingsWindow(Settings(), on_save=saved.append)

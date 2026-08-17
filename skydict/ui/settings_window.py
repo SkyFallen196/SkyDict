@@ -123,6 +123,9 @@ class SettingsWindow:
         #: Popup index -> setting value. Kept here because PyObjC objects reject
         #: arbitrary Python attributes, so the mapping cannot ride on the widget.
         self._choice_values: dict[str, list[str]] = {}
+        self._previous_policy: int | None = None
+        self._save_proxy = None
+        self._delegate = None
 
     # ------------------------------------------------------------------ building
 
@@ -229,6 +232,11 @@ class SettingsWindow:
         )
         window.setTitle_("SkyDict Settings")
         window.center()
+        # Cocoa frees a window on close by default, which would leave a dangling
+        # reference the second time Settings is opened.
+        window.setReleasedWhenClosed_(False)
+        self._delegate = _WindowCloseDelegate.make(self._restore_activation_policy)
+        window.setDelegate_(self._delegate)
 
         tabs = NSTabView.alloc().initWithFrame_(
             NSMakeRect(MARGIN, 60, WINDOW_WIDTH - MARGIN * 2, WINDOW_HEIGHT - 90)
@@ -295,11 +303,29 @@ class SettingsWindow:
             self._window.close()
 
     def show(self) -> None:
-        from AppKit import NSApp
+        """Bring the window up, borrowing a regular app's focus behaviour.
+
+        A menubar app runs with the accessory activation policy, which has no Dock icon
+        and cannot take keyboard focus — its windows come up unfocused and behind, so the
+        form looks dead. Switching to the regular policy while the window is open fixes
+        that; :meth:`_restore_activation_policy` puts it back on close.
+        """
+        from AppKit import NSApp, NSApplicationActivationPolicyRegular
 
         window = self._window or self.build()
+
+        self._previous_policy = NSApp.activationPolicy()
+        NSApp.setActivationPolicy_(NSApplicationActivationPolicyRegular)
         NSApp.activateIgnoringOtherApps_(True)
         window.makeKeyAndOrderFront_(None)
+        window.orderFrontRegardless()
+
+    def _restore_activation_policy(self) -> None:
+        from AppKit import NSApp
+
+        if self._previous_policy is not None:
+            NSApp.setActivationPolicy_(self._previous_policy)
+            self._previous_policy = None
 
 
 def _coerce(raw: Any, spec: Field | None, current: Any) -> Any:
@@ -358,3 +384,29 @@ class _ActionProxy:
         proxy._callback = callback
         cls._registry.append(proxy)  # AppKit holds targets weakly
         return proxy
+
+
+class _WindowCloseDelegate:
+    """Runs a callback when the window closes. Same one-time class trick as above."""
+
+    _registry: list = []
+    _delegate_class = None
+
+    @classmethod
+    def _get_class(cls):
+        if cls._delegate_class is None:
+            from Foundation import NSObject
+
+            class _SkyDictWindowDelegate(NSObject):
+                def windowWillClose_(self, _notification):
+                    self._callback()
+
+            cls._delegate_class = _SkyDictWindowDelegate
+        return cls._delegate_class
+
+    @classmethod
+    def make(cls, callback: Callable[[], None]):
+        delegate = cls._get_class().alloc().init()
+        delegate._callback = callback
+        cls._registry.append(delegate)  # NSWindow holds its delegate weakly
+        return delegate
