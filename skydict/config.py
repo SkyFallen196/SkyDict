@@ -27,6 +27,28 @@ def config_dir() -> Path:
     return user_data_path(APP_NAME, appauthor=False)
 
 
+def directory_size(path: Path) -> int:
+    """Bytes used by a directory tree, following the symlinks in a HF cache exactly once.
+
+    Hugging Face stores each file once under ``blobs`` and links to it from
+    ``snapshots``, so counting symlink targets would double every model.
+    """
+    if not path.exists():
+        return 0
+
+    seen: set[int] = set()
+    total = 0
+    for entry in path.rglob("*"):
+        if entry.is_symlink() or not entry.is_file():
+            continue
+        stat = entry.stat()
+        if stat.st_ino in seen:
+            continue
+        seen.add(stat.st_ino)
+        total += stat.st_size
+    return total
+
+
 def config_path() -> Path:
     return config_dir() / "config.json"
 

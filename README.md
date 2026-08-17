@@ -84,10 +84,18 @@ choice for a single run:
 skydict transcribe -f audio.wav --backend local --model gigaam-v3-e2e-rnnt
 ```
 
-The first local run downloads the ONNX weights from Hugging Face into `~/.cache/huggingface`.
-`skydict check --backend local` does that ahead of time. The default is the int8 build
-(~250 MB, noticeably faster on CPU); set `local.quantization` to `null` in the config for
-the full-precision one (~1 GB).
+The first local run downloads the ONNX weights from Hugging Face into **`~/SkyDict_models`**
+— out in the open rather than buried in `~/Library`, so it is obvious what has been
+downloaded and trivial to reclaim the space by deleting the folder. `skydict check
+--backend local` downloads ahead of time, and `skydict config` reports the path and how
+much is on disk.
+
+The default is the int8 build (~230 MB, noticeably faster on CPU); set
+`local.quantization` to `null` in the config for the full-precision one (~1 GB).
+
+Set `SKYDICT_MODELS_DIR` to put models elsewhere. An `HF_HOME` already set in your
+environment wins over both — if you have pointed your whole machine at another disk,
+SkyDict follows.
 
 ## Permissions
 

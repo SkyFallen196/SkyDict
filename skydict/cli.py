@@ -10,8 +10,9 @@ from typing import Optional
 
 import typer
 
+from . import MODELS_DIR
 from .audio.recorder import list_devices
-from .config import SAMPLE_RATE, BackendName, Settings, TriggerMode, config_path
+from .config import SAMPLE_RATE, BackendName, Settings, TriggerMode, config_path, directory_size
 from .controller import DictationController
 from .history import History
 from .macos.hotkey import DEFAULT_TRIGGER
@@ -348,6 +349,12 @@ def show_config() -> None:
 
     key_status = "set" if get_key(settings.cloud.credential_name) else "MISSING"
     typer.echo(f"\nCloud credential '{settings.cloud.credential_name}': {key_status}")
+
+    size = directory_size(MODELS_DIR)
+    where = MODELS_DIR if MODELS_DIR.exists() else f"{MODELS_DIR}  (nothing downloaded yet)"
+    typer.echo(f"Models: {where}")
+    if size:
+        typer.echo(f"        {size / 1024 / 1024:.0f} MB on disk")
 
 
 @app.command("init-config")
