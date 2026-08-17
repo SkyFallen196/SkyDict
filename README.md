@@ -1,2 +1,122 @@
 # SkyDict
+
 Dictation App. Free, Simple, Open-source
+
+A SuperWhisper-style dictation tool for macOS: hold a hotkey, speak, and the recognised
+text lands in whatever you were typing into. Speech recognition runs either through any
+OpenAI-compatible endpoint (Groq, OpenAI, a self-hosted vLLM) or fully offline on a local
+Hugging Face model such as GigaAM v3.
+
+> **Status:** stage 2 — hold a hotkey anywhere and the text is pasted into the focused
+> app. The menubar UI comes next.
+
+## Install
+
+Requires Python 3.10+ on macOS.
+
+```bash
+conda activate SkyDict
+pip install -e ".[dev]"
+```
+
+## Configure
+
+Store the API key for the cloud backend in the macOS Keychain:
+
+```bash
+skydict set-key groq
+```
+
+Write out the settings file so it can be edited by hand:
+
+```bash
+skydict init-config
+```
+
+Settings live in `~/Library/Application Support/SkyDict/config.json`. The defaults point
+at Groq's `whisper-large-v3-turbo` for the cloud backend and `gigaam-v3-e2e-rnnt` for the
+local one. Because the cloud backend takes its base URL from settings, pointing `base_url`
+at `https://api.openai.com/v1` or a local server works without any code change.
+
+API keys are never written to that file. They are read from the Keychain, or from
+`SKYDICT_<NAME>_API_KEY` in the environment when that is set.
+
+## Use
+
+Hold **right Option**, speak, release — the text is pasted where your cursor is:
+
+```bash
+skydict listen
+```
+
+`--mode toggle` switches to press-once-to-start, press-again-to-stop; `--mode hold_vad`
+also ends the recording on silence. `--trigger left_option|fn|right_command|…` picks a
+different key.
+
+```bash
+skydict permissions                 # check what macOS has granted
+skydict permissions --request       # trigger the system prompt
+skydict devices                     # list microphones
+skydict check                       # verify the configured backend is reachable
+skydict config                      # show current settings
+
+skydict record --seconds 5          # record for 5 seconds, print the text
+skydict record --vad                # record until you stop talking
+skydict record                      # record until Ctrl+C
+
+skydict transcribe -f audio.wav     # transcribe an existing 16-bit PCM WAV
+```
+
+Any command takes `--backend cloud|local` and `--model NAME` to override the configured
+choice for a single run:
+
+```bash
+skydict transcribe -f audio.wav --backend local --model gigaam-v3-e2e-rnnt
+```
+
+The first local run downloads the ONNX weights from Hugging Face into `~/.cache/huggingface`.
+`skydict check --backend local` does that ahead of time. The default is the int8 build
+(~250 MB, noticeably faster on CPU); set `local.quantization` to `null` in the config for
+the full-precision one (~1 GB).
+
+## Permissions
+
+**Microphone** — prompted automatically on first recording.
+
+**Accessibility** — needed to watch for the hotkey and to paste. Without it SkyDict falls
+back to leaving the text on the clipboard, and says so.
+
+Running from a terminal, the entry to enable in System Settings › Privacy & Security ›
+Accessibility is usually the *terminal app*, not the Python interpreter: macOS attributes
+the permission to whatever launched the process. An unbundled script has no identity of
+its own, so a packaged `.app` will get its own entry later.
+
+## Backends
+
+**Cloud** — any OpenAI-compatible `/v1/audio/transcriptions` endpoint. Retries with
+exponential backoff on 429 and 5xx, honouring the server's `Retry-After`.
+
+**Local** — [onnx-asr](https://github.com/istupakov/onnx-asr), which needs only numpy and
+onnxruntime: no torch, no ffmpeg. It serves GigaAM, Whisper, Parakeet, Vosk and T-one.
+The GigaAM `e2e` variants return punctuated, normalised Russian text directly.
+
+## Development
+
+```bash
+pytest              # 92 fast tests, no network, microphone or permissions
+pytest -m slow      # 6 more against the real GigaAM and Silero weights
+ruff check .
+```
+
+The tests fake `sounddevice`, `Quartz` and the ONNX sessions, so the fast suite needs no
+hardware and no granted permissions.
+`tests/data/sample_ru.wav` is Russian speech generated with the macOS speech synthesiser;
+regenerate it with:
+
+```bash
+say -v Milena -o /tmp/sample.aiff "Привет! Это тестовая запись для проверки распознавания речи в приложении SkyDict." && afconvert -f WAVE -d LEI16@16000 -c 1 /tmp/sample.aiff tests/data/sample_ru.wav
+```
+
+## License
+
+MIT
