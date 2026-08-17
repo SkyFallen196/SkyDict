@@ -218,7 +218,7 @@ class TestAgainstAppKit:
         assert saved == [], "an invalid config was handed to the app"
         assert window._window.isVisible(), "the window closed on a rejected form"
 
-    def test_a_good_value_still_saves_and_closes(self):
+    def test_saving_keeps_the_window_open_for_more_edits(self):
         saved: list[Settings] = []
         window = SettingsWindow(Settings(), on_save=saved.append)
         window.build()
@@ -228,7 +228,41 @@ class TestAgainstAppKit:
         window.save()
 
         assert saved and saved[0].vad.silence_duration == 2.5
+        assert window._window.isVisible(), "Save should not close the window"
+        assert window._status_label.stringValue() == "Saved"
+
+    def test_several_saves_in_a_row_all_apply(self):
+        saved: list[Settings] = []
+        window = SettingsWindow(Settings(), on_save=saved.append)
+        window.build()
+
+        window._widgets["vad.silence_duration"].setStringValue_("2.5")
+        window.save()
+        window._widgets["cloud.model"].setStringValue_("whisper-1")
+        window.save()
+
+        assert len(saved) == 2
+        assert saved[-1].vad.silence_duration == 2.5
+        assert saved[-1].cloud.model == "whisper-1"
+
+    def test_close_closes_the_window(self):
+        window = SettingsWindow(Settings())
+        window.build()
+        window.show()
+
+        window.close()
+
         assert not window._window.isVisible()
+
+    def test_a_rejected_save_shows_no_success_message(self, monkeypatch):
+        window = SettingsWindow(Settings())
+        window.build()
+        monkeypatch.setattr(window, "_show_validation_error", lambda exc: None)
+
+        window._widgets["vad.silence_duration"].setStringValue_("-5")
+        window.save()
+
+        assert window._status_label.stringValue() == ""
 
     def test_the_save_button_reaches_the_callback(self):
         saved: list[Settings] = []

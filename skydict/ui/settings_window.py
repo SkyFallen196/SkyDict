@@ -127,7 +127,10 @@ class SettingsWindow:
         self._choice_values: dict[str, list[str]] = {}
         self._previous_policy: int | None = None
         self._save_proxy = None
+        self._close_proxy = None
         self._delegate = None
+        self._status_label = None
+        self._status_timer = None
 
     # ------------------------------------------------------------------ building
 
@@ -238,6 +241,7 @@ class SettingsWindow:
             NSButton,
             NSTabView,
             NSTabViewItem,
+            NSTextField,
             NSTitledWindowMask,
             NSWindow,
             NSWindowStyleMaskClosable,
@@ -276,6 +280,21 @@ class SettingsWindow:
         window.contentView().addSubview_(save)
         # Keep the proxy alive: AppKit targets are weak references.
         self._save_proxy = save.target()
+
+        close = NSButton.alloc().initWithFrame_(NSMakeRect(WINDOW_WIDTH - 220, 16, 90, 32))
+        close.setTitle_("Close")
+        close.setBezelStyle_(1)
+        close.setTarget_(_ActionProxy.make(self.close))
+        close.setAction_("invoke:")
+        window.contentView().addSubview_(close)
+        self._close_proxy = close.target()
+
+        # Saving keeps the window open, so it needs to say that it worked.
+        status = NSTextField.labelWithString_("")
+        status.setFrame_(NSMakeRect(MARGIN, 22, WINDOW_WIDTH - 260, 18))
+        status.setTextColor_(_secondary_colour())
+        window.contentView().addSubview_(status)
+        self._status_label = status
 
         self._window = window
         return window
@@ -327,8 +346,28 @@ class SettingsWindow:
             set_key(settings.cloud.credential_name, api_key)
         if self.on_save is not None:
             self.on_save(settings)
+
+        # Deliberately left open: settings are usually adjusted several at a time, and
+        # closing the window after each Save would make that tedious. Close explicitly.
+        self._flash_status("Saved")
+
+    def close(self) -> None:
         if self._window is not None:
             self._window.close()
+
+    def _flash_status(self, message: str, seconds: float = 3.0) -> None:
+        """Show a short confirmation next to the buttons, then clear it."""
+        if self._status_label is None:
+            return
+        self._status_label.setStringValue_(message)
+
+        from Foundation import NSTimer
+
+        if self._status_timer is not None:
+            self._status_timer.invalidate()
+        self._status_timer = NSTimer.scheduledTimerWithTimeInterval_repeats_block_(
+            seconds, False, lambda _timer: self._status_label.setStringValue_("")
+        )
 
     def _show_validation_error(self, exc: ValidationError) -> None:
         from AppKit import NSAlert, NSAlertStyleWarning
