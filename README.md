@@ -16,17 +16,29 @@ Hugging Face model such as GigaAM v3.
 
 Requires macOS 11+ on Apple Silicon.
 
+Download the DMG from [Releases](https://github.com/SkyFallen196/SkyDict/releases) and
+drag SkyDict into Applications. Because the app is signed ad-hoc rather than with an
+Apple Developer ID, macOS quarantines anything downloaded and reports it as *damaged*
+instead of offering the usual "open anyway". Clear the flag once:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/SkyDict.app
+```
+
+Launch it and a 🎙 appears in the menubar. Then grant Accessibility — see
+[Permissions](#permissions) — otherwise the hotkey does nothing and dictations only reach
+the clipboard.
+
+To build it yourself instead:
+
 ```bash
 conda activate SkyDict
 ./build.sh --install
 ```
 
-That produces `SkyDict.app`, signs it and copies it to `/Applications`. Launch it and a
-🎙 appears in the menubar. Set `PYTHON=/path/to/python` if the interpreter you want to
-build with is not first on `PATH`.
-
-Then grant Accessibility — see [Permissions](#permissions) — otherwise the hotkey does
-nothing and dictations only reach the clipboard.
+That produces `SkyDict.app`, signs it and copies it to `/Applications`, with no quarantine
+to clear because nothing was downloaded. Set `PYTHON=/path/to/python` if the interpreter
+you want to build with is not first on `PATH`.
 
 To work on the code instead of building:
 
@@ -199,6 +211,26 @@ say -v Milena -o /tmp/sample.aiff "Привет! Это тестовая зап�
 One thing the suite cannot cover: the hotkey and pasting need Accessibility, which is
 granted to a *binary*, so they have to be tried by hand from a terminal you have granted
 or from the built app.
+
+## Releasing
+
+```bash
+./release.sh                    # build dist/SkyDict-<version>-arm64.dmg
+./release.sh --publish          # also tag the commit and upload it to GitHub Releases
+./release.sh --publish --draft  # upload as a draft, to edit the notes first
+```
+
+The version is read from `skydict/__init__.py`, `pyproject.toml` and `setup.py`, which
+have to agree — bump all three together, or the script stops before building. Publishing
+needs [`gh`](https://cli.github.com) (`brew install gh && gh auth login`) and a clean
+working tree; it tags `v<version>` and writes install notes carrying the quarantine
+command above.
+
+`--skip-build` packages the `dist/SkyDict.app` that is already there, which is worth it
+when only the DMG or the notes changed: the py2app build is the slow part.
+
+The DMG holds the app and a symlink to `/Applications`, compressed — 207 MB of bundle
+comes out around 103 MB.
 
 ## License
 
