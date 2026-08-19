@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from skydict.macos import permissions
+from skydict.platform.macos import permissions
 
 
 def test_bundle_is_detected_from_the_py2app_environment(monkeypatch):

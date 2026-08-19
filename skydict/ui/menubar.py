@@ -19,14 +19,14 @@ from collections.abc import Callable
 from ..config import BackendName, Settings, TriggerMode
 from ..controller import DictationController
 from ..history import History
-from ..macos.permissions import (
+from ..pipeline import DictationResult, State
+from ..platform import (
+    Clipboard,
     check_listen_access,
     check_microphone,
     check_post_access,
     open_accessibility_settings,
 )
-from ..output.clipboard import Clipboard
-from ..pipeline import DictationResult, State
 from ..secrets import MissingCredentialError
 
 log = logging.getLogger(__name__)

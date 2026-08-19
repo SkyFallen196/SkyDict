@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from skydict.macos.permissions import PermissionError_
 from skydict.output.inserter import ClipboardInserter, TextInserter, build_inserter
+from skydict.platform import PermissionError_
 
 
 class FakeClipboard:

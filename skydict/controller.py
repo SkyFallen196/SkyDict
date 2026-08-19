@@ -2,7 +2,7 @@
 
 This is the piece the menubar UI will drive too: it owns the hotkey listener, decides
 what a press and a release mean for the configured trigger mode, and keeps transcription
-off the hotkey thread so the tap never stalls (macOS disables a tap that blocks).
+off the hotkey thread so the hook never stalls (the OS disables a hook that blocks).
 """
 
 from __future__ import annotations
@@ -12,9 +12,9 @@ import threading
 from collections.abc import Callable
 
 from .config import Settings
-from .macos.hotkey import DEFAULT_TRIGGER, HotkeyEvent, ModifierHotkeyListener
 from .output.inserter import build_inserter
 from .pipeline import DictationResult, DictationSession, TooShortError
+from .platform import DEFAULT_TRIGGER, HotkeyEvent, ModifierHotkeyListener
 from .stt.base import SttError
 from .stt.registry import build_backend
 

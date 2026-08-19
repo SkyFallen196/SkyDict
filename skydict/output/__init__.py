@@ -1,4 +1,4 @@
-from .clipboard import Clipboard
+from ..platform import Clipboard
 from .inserter import TextInserter, build_inserter
 
 __all__ = ["Clipboard", "TextInserter", "build_inserter"]

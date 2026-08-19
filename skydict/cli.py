@@ -15,8 +15,9 @@ from .audio.recorder import list_devices
 from .config import SAMPLE_RATE, BackendName, Settings, TriggerMode, config_path, directory_size
 from .controller import DictationController
 from .history import History
-from .macos.hotkey import DEFAULT_TRIGGER
-from .macos.permissions import (
+from .pipeline import DictationSession, State, TooShortError
+from .platform import (
+    DEFAULT_TRIGGER,
     PermissionError_,
     check_listen_access,
     check_microphone,
@@ -27,12 +28,11 @@ from .macos.permissions import (
     require_listen_access,
     require_microphone,
 )
-from .pipeline import DictationSession, State, TooShortError
 from .secrets import MissingCredentialError, get_key, set_key
 from .stt.base import SttError, read_wav
 from .stt.registry import build_backend
 
-app = typer.Typer(help="SkyDict — dictation for macOS.", no_args_is_help=True)
+app = typer.Typer(help="SkyDict — dictation.", no_args_is_help=True)
 
 
 def _configure_logging(verbose: bool) -> None:
@@ -172,13 +172,13 @@ def record(
 def set_key_command(
     name: str = typer.Argument(..., help="Credential name, e.g. 'groq'."),
 ) -> None:
-    """Store an API key in the macOS Keychain."""
+    """Store an API key in the system keyring."""
     value = typer.prompt(f"API key for '{name}'", hide_input=True)
     if not value.strip():
         typer.secho("Empty key, nothing stored.", fg=typer.colors.RED, err=True)
         raise typer.Exit(1)
     set_key(name, value.strip())
-    typer.secho(f"Stored key for '{name}' in the Keychain.", fg=typer.colors.GREEN)
+    typer.secho(f"Stored key for '{name}' in the system keyring.", fg=typer.colors.GREEN)
 
 
 @app.command("check")
@@ -278,6 +278,13 @@ def menubar(
 ) -> None:
     """Run SkyDict as a menubar app."""
     _configure_logging(verbose)
+    if sys.platform != "darwin":
+        typer.secho(
+            "The menubar UI is macOS-only for now; use `skydict listen` instead.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(1)
     settings = _load_settings(backend, None)
 
     from .ui.menubar import SkyDictApp
@@ -313,7 +320,7 @@ def history(
 def permissions(
     request: bool = typer.Option(False, "--request", help="Ask macOS for event access."),
 ) -> None:
-    """Show the macOS permissions SkyDict needs and whether they are granted."""
+    """Show the permissions SkyDict needs and whether they are granted."""
     if request:
         request_accessibility()
 
@@ -322,34 +329,41 @@ def permissions(
             "MISSING", fg=typer.colors.RED
         )
 
-    # macOS grants permissions per binary, and this command runs as the interpreter, not
-    # as SkyDict.app. Saying so avoids reading these as the built app's status.
-    typer.secho(
-        "Permissions belong to whichever app runs the code. These are for this "
-        "process, not for a built SkyDict.app — check that one from its own "
-        "Permissions… menu.",
-        fg=typer.colors.YELLOW,
-        err=True,
-    )
-    typer.echo()
-
     mic = check_microphone()
     typer.echo(f"Microphone:          {mark(mic == 'authorized')}  ({mic})")
     typer.echo(f"Hotkey (listen):     {mark(check_listen_access())}")
     typer.echo(f"Paste (post events): {mark(check_post_access())}")
     typer.echo(f"\nRunning as: {host_process_name()}")
-    if mic == "not_determined":
-        typer.echo(
-            "Microphone shows 'not_determined' because this binary has never asked for "
-            "it; macOS prompts on the first recording."
-        )
 
-    if not check_listen_access() or not check_post_access():
-        typer.echo(
-            "\nGrant Accessibility in System Settings › Privacy & Security › Accessibility.\n"
-            "From a terminal, enable the terminal app itself — macOS attributes the\n"
-            "permission to the app that launched the process, not to the interpreter.\n"
-            "Run `skydict permissions --request` to trigger the system prompt."
+    if sys.platform == "darwin":
+        # macOS grants permissions per binary, and this command runs as the interpreter,
+        # not as SkyDict.app. Saying so avoids reading these as the built app's status.
+        typer.secho(
+            "Permissions belong to whichever app runs the code. These are for this "
+            "process, not for a built SkyDict.app — check that one from its own "
+            "Permissions… menu.",
+            fg=typer.colors.YELLOW,
+            err=True,
+        )
+        if mic == "not_determined":
+            typer.echo(
+                "Microphone shows 'not_determined' because this binary has never asked "
+                "for it; macOS prompts on the first recording."
+            )
+        if not check_listen_access() or not check_post_access():
+            typer.echo(
+                "\nGrant Accessibility in System Settings › Privacy & Security › "
+                "Accessibility.\n"
+                "From a terminal, enable the terminal app itself — macOS attributes the\n"
+                "permission to the app that launched the process, not to the interpreter.\n"
+                "Run `skydict permissions --request` to trigger the system prompt."
+            )
+    elif mic == "denied":
+        typer.secho(
+            "Microphone access for desktop apps is off. Enable it in "
+            "Settings › Privacy & Security › Microphone.",
+            fg=typer.colors.YELLOW,
+            err=True,
         )
 
 

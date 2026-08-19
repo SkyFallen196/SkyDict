@@ -1,4 +1,4 @@
-"""SkyDict — dictation app for macOS."""
+"""SkyDict — dictation app."""
 
 from __future__ import annotations
 

@@ -6,6 +6,7 @@ these tests drive that drain directly with a stub for the rumps status item.
 
 from __future__ import annotations
 
+import sys
 import threading
 
 import pytest
@@ -16,6 +17,9 @@ from skydict.pipeline import DictationResult, State
 from skydict.secrets import MissingCredentialError
 from skydict.stt.base import TranscriptResult
 from skydict.ui.menubar import STATE_ICONS, SkyDictApp
+
+#: rumps and AppKit are macOS-only; the tests below that touch them are skipped elsewhere.
+darwin_only = pytest.mark.skipif(sys.platform != "darwin", reason="requires macOS rumps/AppKit")
 
 
 class FakeApp:
@@ -179,6 +183,7 @@ def menu_titles(app) -> list[str]:
     ]
 
 
+@darwin_only
 class TestRecentMenu:
     """Against real rumps objects — these need no event loop, and a stub would have
     hidden the lazily-created submenu that made refresh_recent crash on first run."""
@@ -280,6 +285,7 @@ class TestSettingsWindow:
         assert shown == ["shown"]
         assert app._settings_window is not None
 
+    @darwin_only
     def test_reopening_shows_the_current_settings(self, app, monkeypatch):
         """The window edits a copy taken when it is built, so a closed one reused later
         would show pre-change values and silently undo them on save."""
@@ -298,6 +304,7 @@ class TestSettingsWindow:
         ]
         assert selected == "hold_vad"
 
+    @darwin_only
     def test_an_open_window_is_brought_forward_not_duplicated(self, app, monkeypatch):
         monkeypatch.setattr(
             "skydict.ui.settings_window.SettingsWindow.show",
@@ -311,6 +318,7 @@ class TestSettingsWindow:
 
         assert app._settings_window is first
 
+    @darwin_only
     def test_a_menu_change_updates_the_open_window(self, app, monkeypatch):
         """Otherwise the form keeps showing the old value and puts it back on Save."""
         monkeypatch.setattr(
@@ -330,6 +338,7 @@ class TestSettingsWindow:
         assert shown("trigger_mode") == "toggle"
         assert shown("backend") == "local"
 
+    @darwin_only
     def test_saving_a_synced_window_does_not_undo_the_menu_change(self, app, monkeypatch):
         monkeypatch.setattr(
             "skydict.ui.settings_window.SettingsWindow.show",
@@ -344,6 +353,7 @@ class TestSettingsWindow:
         assert app.settings.trigger_mode == "toggle"
         assert app.controller.settings.trigger_mode == "toggle"
 
+    @darwin_only
     def test_a_closed_window_is_not_touched_by_menu_changes(self, app, monkeypatch):
         monkeypatch.setattr(
             "skydict.ui.settings_window.SettingsWindow.show",
@@ -370,6 +380,7 @@ class TestSettingsWindow:
         assert live.trigger_mode == "toggle"
         assert app.controller.settings.trigger_mode == "toggle"
 
+    @darwin_only
     def test_saving_moves_the_menu_ticks(self, app):
         import rumps
 

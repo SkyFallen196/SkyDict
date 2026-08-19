@@ -64,7 +64,7 @@ class DictationSession:
         self.settings = settings or Settings()
         self.backend = backend or build_backend(self.settings)
         self.processor = processor or PassthroughProcessor()
-        #: Where finished text goes. The CLI prints it; the macOS layer pastes it.
+        #: Where finished text goes. The CLI prints it; the platform layer pastes it.
         self.deliver = deliver
 
         self._state = State.IDLE

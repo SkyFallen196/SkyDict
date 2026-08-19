@@ -22,18 +22,12 @@ import os
 import subprocess
 import sys
 
+from ..base import PermissionError_
+
 log = logging.getLogger(__name__)
 
 ACCESSIBILITY_PANE = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
 MICROPHONE_PANE = "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
-
-
-class PermissionError_(RuntimeError):
-    """A required macOS permission has not been granted."""
-
-    def __init__(self, message: str, pane: str | None = None) -> None:
-        super().__init__(message)
-        self.pane = pane
 
 
 def running_in_bundle() -> bool:

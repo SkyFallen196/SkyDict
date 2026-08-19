@@ -15,8 +15,8 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Callable
-from enum import Enum
 
+from ..base import HotkeyError, HotkeyEvent
 from .permissions import require_listen_access
 
 log = logging.getLogger(__name__)
@@ -50,15 +50,6 @@ DEVICE_FLAG_MASKS: dict[str, int] = {
     "right_option": 0x00000040,
     "right_control": 0x00002000,
 }
-
-
-class HotkeyEvent(Enum):
-    PRESSED = "pressed"
-    RELEASED = "released"
-
-
-class HotkeyError(RuntimeError):
-    """The event tap could not be created or was disabled by the system."""
 
 
 class ModifierHotkeyListener:

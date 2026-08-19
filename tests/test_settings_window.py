@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from skydict.config import Settings
@@ -78,6 +80,7 @@ def test_numbers_survive_a_round_trip_through_the_form():
     assert Settings.model_validate(settings.model_dump()).vad.silence_duration == 3.0
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="requires macOS AppKit")
 class TestAgainstAppKit:
     """Builds the real window. No event loop is needed, and stubbing AppKit would have
     hidden that PyObjC objects reject the arbitrary Python attributes an earlier version

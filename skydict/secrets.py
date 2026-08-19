@@ -1,7 +1,9 @@
-"""API key storage backed by the macOS Keychain.
+"""API key storage backed by the system keyring.
 
-Keys are looked up in the Keychain first and fall back to ``SKYDICT_<NAME>_API_KEY``
-so that tests and CI can run without touching the user's login keychain.
+``keyring`` stores secrets wherever the platform keeps them — the macOS Keychain, Windows
+Credential Manager or the freedesktop Secret Service. Keys are looked up there first and
+fall back to ``SKYDICT_<NAME>_API_KEY`` so tests and CI can run without touching the
+user's real keyring.
 """
 
 from __future__ import annotations

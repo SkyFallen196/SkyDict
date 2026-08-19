@@ -10,8 +10,8 @@ import pytest
 
 from skydict.config import Settings
 from skydict.controller import DictationController
-from skydict.macos.hotkey import HotkeyEvent
 from skydict.pipeline import DictationSession
+from skydict.platform import HotkeyEvent
 from skydict.stt.base import SttError, TranscriptResult
 
 

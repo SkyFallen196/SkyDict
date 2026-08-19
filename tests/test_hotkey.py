@@ -7,7 +7,7 @@ import types
 
 import pytest
 
-from skydict.macos.hotkey import (
+from skydict.platform.macos.hotkey import (
     DEVICE_FLAG_MASKS,
     MODIFIER_KEYCODES,
     HotkeyEvent,
@@ -32,7 +32,7 @@ def fake_quartz(monkeypatch):
     module.CGEventTapEnable = lambda tap, enable: module.enabled_calls.append(enable)
 
     monkeypatch.setitem(sys.modules, "Quartz", module)
-    monkeypatch.setattr("skydict.macos.hotkey.require_listen_access", lambda: None)
+    monkeypatch.setattr("skydict.platform.macos.hotkey.require_listen_access", lambda: None)
     return module
 
 
